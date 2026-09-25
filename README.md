@@ -20,6 +20,8 @@ It adds nothing to the time between pressing Enter and getting a response.
 > **Unofficial community plugin.** Not affiliated with, endorsed by, or
 > supported by TypeSafe or Anthropic. You bring your own TypeSafe API key.
 
+> **OpenJEV support:** Jev is built by [TypeSafe](https://typesafe.ai). This fork keeps TypeSafe as the default and adds optional support for [OpenJEV](https://openjev.sh), a free community gateway to the same Jev model — set `OPENJEV_API_KEY` (or `JEV_PROVIDER=openjev`) to use it. Original project: https://github.com/CrowdLinker/JevPromptCoach by @CrowdLinker.
+
 ---
 
 ## Why this exists
@@ -42,10 +44,11 @@ for output. You get a report on day one instead of in two weeks.
 - **Claude Code 2.1.x or newer.** Plugin-declared `UserPromptSubmit` hooks did
   not execute on some earlier versions, and the plugin depends on them.
 - **A TypeSafe API key**, from [console.typesafe.ai](https://console.typesafe.ai/settings/keys).
+  Or an OpenJEV API key, from [openjev.sh/dashboard](https://openjev.sh/dashboard).
 
 The plugin bundles its own dependencies into `dist/`. There is no install step,
-no `node_modules`, nothing fetched at runtime, and the only host it ever
-contacts is `api.typesafe.ai`. Installed, it is 376 KB.
+no `node_modules`, nothing fetched at runtime, and the hosts it can contact are
+`api.typesafe.ai` (default) and `api.openjev.sh` (optional). Installed, it is 376 KB.
 
 Claude Code itself ships as a native binary and brings no Node of its own, so
 the Node on your `PATH` is what runs the hook. Node 22 is the floor, and CI
@@ -82,6 +85,12 @@ Then open `~/.claude/jevpromptcoach/.env` in your editor and add one line:
 
 ```
 TYPESAFE_API_KEY=your-key-here
+```
+
+To use OpenJEV instead, set `OPENJEV_API_KEY` (and optionally `JEV_PROVIDER=openjev`):
+
+```
+OPENJEV_API_KEY=your-openjev-key-here
 ```
 
 The key file is where the plugin looks. A hook does not run under your shell
@@ -359,7 +368,7 @@ leave the machine.
 
 **Exactly what is sent, and when:**
 
-| When | What goes to `api.typesafe.ai` |
+| When | What goes to `api.typesafe.ai` (or `api.openjev.sh`) |
 | --- | --- |
 | `/jevpromptcoach:score` | The one prompt you passed, redacted |
 | `/jevpromptcoach:report` | Any logged prompts not yet scored, redacted, batched |
@@ -369,7 +378,8 @@ leave the machine.
 
 No telemetry. No other network destination. The API key is read from the
 environment or the key file, and never logged, printed, or included in an error
-message — error text is scrubbed of it on the way out.
+message — error text is scrubbed of it on the way out. With OpenJEV, the same
+data goes to `api.openjev.sh` instead; the model and wire format are identical.
 
 A prompt is scored once. Results are cached by content hash, so unchanged text is
 never re-sent. The exception is a follow-up in `always` mode, which is scored
@@ -493,6 +503,7 @@ UserPromptSubmit ──► hook.ts ──► redact ──► append JSONL ─�
 /jevpromptcoach:score  ─┐
 /jevpromptcoach:report ─┼──► one batched request ──► api.typesafe.ai/v1/systemone
 config backfill        ─┘                            model: jev-latest
+                                                  (or api.openjev.sh/v1/systemone, model: openjev)
 ```
 
 Every question is a Noul — a yes/no question returning a calibrated probability.
@@ -504,8 +515,9 @@ Noul answers carry no `confidence` field, unlike Choice and Score. Certainty is
 read from the probability's distance from the threshold, which is what the
 inline margin gates on.
 
-The scoring model is `jev-latest` (currently `jev-1.13.0`) and there is no
-fallback to any other provider. If Jev does not answer, nothing is scored and the
+The scoring model is `jev-latest` (currently `jev-1.13.0`) with TypeSafe, or
+`openjev` with OpenJEV. There is no fallback between providers. If Jev does not
+answer, nothing is scored and the
 command says so.
 
 The one thing Jev does not do is write. `/jevpromptcoach:score` produces the

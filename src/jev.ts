@@ -8,9 +8,16 @@
  * Type imports are erased at build time; nothing on the hook path loads the SDK.
  */
 import type { EntryType, NoulQuestion as SdkNoulQuestion, Usage } from '@typesafe-ai/sdk';
-import { apiKey } from './config.js';
+import { activeApiKey, jevProvider } from './config.js';
 
 export const MODEL = 'jev-latest';
+export const OPENJEV_MODEL = 'openjev';
+const OPENJEV_BASE_URL = 'https://api.openjev.sh';
+
+/** The model id for the active provider. */
+export function activeModel(): string {
+  return jevProvider() === 'openjev' ? OPENJEV_MODEL : MODEL;
+}
 
 /**
  * The SDK accepts structured instructions and criteria. This plugin only ever
@@ -30,12 +37,17 @@ export class JevUnavailable extends Error {}
  * module, so the cost of loading the client is never paid on the prompt path.
  */
 async function client(timeoutMs: number) {
-  const key = apiKey();
-  if (!key) throw new JevUnavailable('TYPESAFE_API_KEY is not set');
+  const provider = jevProvider();
+  const key = activeApiKey();
+  const model = provider === 'openjev' ? OPENJEV_MODEL : MODEL;
+  if (!key) throw new JevUnavailable(
+    provider === 'openjev' ? 'OPENJEV_API_KEY is not set' : 'TYPESAFE_API_KEY is not set',
+  );
   const { TypeSafeClient } = await import('@typesafe-ai/sdk');
   return new TypeSafeClient({
-    apiKey: key,
-    defaultModel: MODEL,
+    apiKey: ***,
+    defaultModel: model,
+    baseURL: provider === 'openjev' ? OPENJEV_BASE_URL : undefined,
     timeout: timeoutMs,
     logLevel: 'error',
     retry: { maxRetries: 2 },
@@ -48,7 +60,7 @@ async function client(timeoutMs: number) {
  * fetch can still quote a URL or a header we built, so this is belt and braces.
  */
 function safeMessage(err: unknown): string {
-  const key = apiKey();
+  const key = activeApiKey();
   let msg = err instanceof Error ? err.message : String(err);
   if (key && key.length > 4) msg = msg.split(key).join('[REDACTED]');
   return msg.replace(/\b(sk-[A-Za-z0-9_-]+|Bearer\s+\S+)/g, '[REDACTED]').slice(0, 300);
@@ -73,7 +85,7 @@ export async function ask(
   const timeoutMs = options.timeoutMs ?? 30_000;
   const c = await client(timeoutMs);
   try {
-    const result = await c.systemOne({ state, questions, model: MODEL });
+    const result = await c.systemOne({ state, questions, model: activeModel() });
 
     options.onUsage?.(result.usage);
 

@@ -69,6 +69,31 @@ export function apiKey(): string | null {
   return envValue('TYPESAFE_API_KEY');
 }
 
+/** OpenJEV API key, read the same way as the TypeSafe key. */
+export function openjevApiKey(): string | null {
+  return envValue('OPENJEV_API_KEY');
+}
+
+export type JevProvider = 'typesafe' | 'openjev';
+
+/**
+ * Which provider to call. Explicit choice wins; otherwise TypeSafe if its key
+ * is set (the unchanged default); otherwise OpenJEV if only its key is set.
+ */
+export function jevProvider(): JevProvider {
+  const explicit = envValue('JEV_PROVIDER');
+  if (explicit === 'openjev') return 'openjev';
+  if (explicit === 'typesafe') return 'typesafe';
+  if (apiKey()) return 'typesafe';
+  if (openjevApiKey()) return 'openjev';
+  return 'typesafe';
+}
+
+/** The key for the active provider. */
+export function activeApiKey(): string | null {
+  return jevProvider() === 'openjev' ? openjevApiKey() : apiKey();
+}
+
 /**
  * A setting from the environment, falling back to the key file for the same
  * reason the key does: the hook does not run under the developer's shell
@@ -112,8 +137,10 @@ export function sessionRepliesEnabled(): boolean {
  * `null` means no key is available and nothing can be scored.
  */
 export function apiKeySource(): 'environment' | 'key file' | null {
-  if (process.env.TYPESAFE_API_KEY?.trim()) return 'environment';
-  return apiKey() ? 'key file' : null;
+  const provider = jevProvider();
+  const envName = provider === 'openjev' ? 'OPENJEV_API_KEY' : 'TYPESAFE_API_KEY';
+  if (process.env[envName]?.trim()) return 'environment';
+  return activeApiKey() ? 'key file' : null;
 }
 
 /** Store the key at 0600 for the hook process to read. Never logs it. */

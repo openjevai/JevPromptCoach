@@ -15,9 +15,9 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { type CheckDef, CHECKS, type CheckId, GATES } from './checks.js';
-import { apiKey, loadConfig } from './config.js';
+import { activeApiKey, loadConfig } from './config.js';
 import type { Turn } from './conversation.js';
-import { MODEL, USD_PER_INPUT_TOKEN } from './jev.js';
+import { activeModel, USD_PER_INPUT_TOKEN } from './jev.js';
 import type { ScoreRecord } from './log.js';
 import { applyPrivacy } from './redact.js';
 import { scoreMany } from './score.js';
@@ -64,8 +64,8 @@ const TARGET_PRECISION = 0.9;
 const TUNING_PRECISION = 0.95;
 
 async function main(): Promise<void> {
-  if (!apiKey()) {
-    process.stderr.write('TYPESAFE_API_KEY is not set. The eval calls Jev and cannot run without it.\n');
+  if (!activeApiKey()) {
+    process.stderr.write('No Jev API key found (TYPESAFE_API_KEY or OPENJEV_API_KEY). The eval calls Jev and cannot run without it.\n');
     process.exit(1);
   }
 
@@ -267,7 +267,7 @@ async function main(): Promise<void> {
     JSON.stringify(
       {
         ranAt: new Date().toISOString(),
-        model: MODEL,
+        model: activeModel(),
         fixtures: fixtures.length,
         ...(conversations ? { set: 'conversations' } : {}),
         inputTokens,

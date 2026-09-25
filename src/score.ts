@@ -8,7 +8,7 @@
  * over thousands of prompts affordable.
  */
 import { CHECKS, type CheckDef, type CheckId, GATES, type GateId } from './checks.js';
-import { ask, estimateTokens, MODEL, type NoulQuestion, tryAsk, type Usage } from './jev.js';
+import { activeModel, ask, estimateTokens, type NoulQuestion, tryAsk, type Usage } from './jev.js';
 import type { Turn } from './conversation.js';
 import type { ScoreRecord } from './log.js';
 import { runPool } from './pool.js';
@@ -227,7 +227,7 @@ function unpack(answers: Record<string, number>, key: string, hash: string, ts: 
     const value = answers[`${key}__${gate.id}`];
     if (value !== undefined) gates[gate.id] = value;
   }
-  return { hash, ts, probabilities, gates, model: MODEL };
+  return { hash, ts, probabilities, gates, model: activeModel() };
 }
 
 async function runBatch(batch: Batch, options: ScoreRunOptions): Promise<ScoreRecord[]> {

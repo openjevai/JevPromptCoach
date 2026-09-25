@@ -4,7 +4,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { CHECKS, GATES } from './checks.js';
-import { apiKey, apiKeySource, ENV_PATH, LOG_PATH, loadConfig, saveConfig } from './config.js';
+import { activeApiKey, apiKeySource, ENV_PATH, LOG_PATH, loadConfig, saveConfig, jevProvider } from './config.js';
 import { clampReply, readConversations, toTurns } from './conversation.js';
 import { buildPairs, detectCorrections, estimateCorrectionTokens } from './correction.js';
 import { promptHash } from './hash.js';
@@ -33,11 +33,14 @@ const out = (s: string): void => {
 };
 
 function requireKey(): boolean {
-  if (apiKey()) return true;
-  out('No TypeSafe API key found.');
+  if (activeApiKey()) return true;
+  const provider = jevProvider();
+  const keyEnv = provider === 'openjev' ? 'OPENJEV_API_KEY' : 'TYPESAFE_API_KEY';
+  const keyUrl = provider === 'openjev' ? 'https://openjev.sh/dashboard' : 'https://console.typesafe.ai/settings/keys';
+  out(`No ${keyEnv} found.`);
   out('');
-  out("JevPromptCoach runs on TypeSafe's Jev model and makes no calls without it.");
-  out('Get a key at https://console.typesafe.ai/settings/keys, then put it in the');
+  out("JevPromptCoach runs on Jev and makes no calls without an API key.");
+  out(`Get a key at ${keyUrl}, then put it in the`);
   out('key file — created locked down first, so the key is never world-readable');
   out('and never sits in your shell history:');
   out('');
@@ -45,9 +48,9 @@ function requireKey(): boolean {
   out('  touch ~/.claude/jevpromptcoach/.env');
   out('  chmod 600 ~/.claude/jevpromptcoach/.env');
   out('');
-  out('Then add one line to ~/.claude/jevpromptcoach/.env:');
+  out(`Then add one line to ~/.claude/jevpromptcoach/.env:`);
   out('');
-  out('  TYPESAFE_API_KEY=your-key-here');
+  out(`  ${keyEnv}=your-key-here`);
   out('');
   out('Your logged prompts are untouched and nothing was sent.');
   return false;
@@ -142,9 +145,9 @@ async function cmdReport(argv: string[]): Promise<void> {
   // Without a key we cannot score the new ones, but we can still report on
   // everything already scored. Refusing to print anything would make the report
   // permanently unusable, since the hook keeps logging new prompts.
-  if (unscored.length > 0 && !apiKey()) {
+  if (unscored.length > 0 && !activeApiKey()) {
     process.stderr.write(
-      `TYPESAFE_API_KEY is not set, so ${unscored.length} newer prompts could not be scored.\n` +
+      `No Jev API key is set, so ${unscored.length} newer prompts could not be scored.\n` +
         'Reporting on what is already scored. Nothing was sent.\n',
     );
   } else if (unscored.length > 0) {
@@ -290,10 +293,13 @@ async function cmdConfig(argv: string[]): Promise<void> {
     // key came from the file sends anyone debugging a missing key to the wrong
     // place, and the file is the method the docs now teach.
     const source = apiKeySource();
+    const provider = jevProvider();
+    const keyEnv = provider === 'openjev' ? 'OPENJEV_API_KEY' : 'TYPESAFE_API_KEY';
+    out(`Provider:        ${provider}`);
     out(
       `API key:         ${
         source === 'environment'
-          ? 'set (TYPESAFE_API_KEY in the environment)'
+          ? `set (${keyEnv} in the environment)`
           : source === 'key file'
             ? `set (${ENV_PATH})`
             : 'NOT SET — no scoring is possible'
@@ -497,7 +503,7 @@ function cmdStatus(): void {
       setupComplete: config.setupComplete,
       mode: config.mode,
       privacy: config.privacy,
-      hasKey: Boolean(apiKey()),
+      hasKey: Boolean(activeApiKey()),
       logged: entries.length,
       scored: readScores().size,
       lastBackfill: config.lastBackfill,
